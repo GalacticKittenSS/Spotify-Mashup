@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spotify Mashup</title>
+
+  <style type="text/css">
+    :root {
+      --margin: 0.5rem;
+    }
+    
+    body {
+      color: white;
+      background: rgb(20, 20, 20);
+    }
+
+    input[type="checkbox"] {
+      margin: 0 var(--margin);
+      padding: 0;
+      width: 2rem;
+      height: 2rem;
+    }
+
+    .label {
+      display: block;
+      width: 100%;
+      font-size: 1.1em;
+      margin: 0;
+    }
+
+    .Playlist {
+      margin: var(--margin);
+      margin-bottom: 1.05rem;
+      padding: 0.15rem;
+      background: rgb(60, 60, 60);
+    }
+
+    .Playlist h4 {
+      font-size: 1.2em;
+      margin: 12px 0px 12px 0px;
+    }
+
+    .Tracks {
+      padding: var(--margin);
+      background: rgb(45, 45, 45);
+    }
+
+    .Track {
+      display: flex;
+      align-items: center;
+      margin-bottom: var(--margin);
+    }
+
+    .Track input[type="checkbox"] {
+      width: 1.2rem;
+      height: 1.2rem;
+      margin-right: 0;
+    }
+
+    .playlist-preview {
+      height: 4rem;
+      margin: 0.25rem;
+    }
+    
+    .playlist-info {
+      margin: var(--margin);
+    }
+
+    .playlist-info p {
+      margin: 0.4rem;
+    }
+    
+    .playlist-info input {
+      border: 0;
+      width: 50%;
+      height: max(5vw, 2rem);
+      background: rgb(60, 60, 60);
+      color: white;
+      font-size: max(2.5vw, 1.2rem);
+      text-align: center;
+    }
+
+    .centre {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <!--button onclick="ElementDisplay('none', 'block')">Show Playlists</button-->
+  <!--button onclick="ElementDisplay('block', 'none')">Show Tracks</button-->
+
+  <h1 class="centre">Spotify Playlist Mashup</h1>
+    
+  <form action="/submit" method="post">
+    <input type="text" name="user" value="{key}" style="display:none" readonly>
+    <div class="playlist-info centre">
+      <input type="text" name="playlist_name" placeholder="Playlist Name" maxlength="100" required>
+      <p></p>
+      <input type="submit" value="Create Playlist">
+    </div>
+    
+    {body}
+
+    <input type="text" name="tracks" style="display: none">
+</form>
+  <div id='loading' class="centre" style='display: none;'>
+    <p>Loading...</p>
+  </div>
+  <script>
+      async function GetTracks(next_url) {
+          items = [];
+          while (next_url) {
+              const payload = {
+                method: 'GET',
+                headers: { 'Authorization': 'Bearer {token}' },
+              };
+
+              const response = await fetch(next_url, payload)
+              const data = await response.json()
+              const tracks = data['items'];
+
+              for (let i = 0; i < tracks.length; i++)
+                  items.push(tracks[i]['track']['id']);
+              
+              next_url = data['next'];
+          }
+
+          return items;
+      }
+      
+      async function AddTracks(next_url, playlist) {
+        while (next_url) {
+          const payload = {
+            method: 'GET',
+            headers: { 'Authorization': 'Bearer {token}' },
+          };
+
+          const response = await fetch(next_url, payload)
+          const data = await response.json()
+              
+          const items = data['items'];
+          for (var i = 0; i < items.length; i++) {
+            let track = items[i];
+            if (track['track'])
+              track = track['track'];
+            
+            const div = document.createElement('div');
+            div.id = track['id'];
+            div.className = 'Track';
+            
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.name = div.id;
+
+            const label = document.createElement('p');
+            label.className = 'label';
+            label.innerHTML = track['name'];
+
+            div.appendChild(label);
+            div.appendChild(input);
+
+            //const form = document.getElementsByTagName('form')[0];
+            playlist.appendChild(div);
+          } 
+          
+          next_url = data['next'];
+        }
+      }
+
+      function ToggleEnableElements(playlist_id, checked) {
+        const playlist = document.getElementById(playlist_id);
+        const node = playlist.children[1];
+        
+        for (var i = 1; i < node.childElementCount; i++) {
+          const div = node.childNodes[i];
+          const child = div.childNodes[1];
+          child.checked = checked;
+        }
+      }
+      
+      async function ToggleShowElements(playlist_id, type) {
+        const playlist = document.getElementById(playlist_id);
+        const node = playlist.children[1];
+        if (node.childElementCount > 0)
+        {
+            if (node.style.display == 'none')
+                node.style.display = 'block';
+            else
+                node.style.display = 'none';
+        }
+        else
+        {   
+            const div = document.createElement('div');
+            div.className = 'centre';
+            
+            const loading = document.createElement('p');
+            loading.innerHTML = "Loading Tracks...";
+            loading.style.margin = 0;
+            loading.style.padding = 0;
+            div.appendChild(loading);
+            
+            node.appendChild(div);
+            node.style.display = 'block';
+
+            const url = 'https://api.spotify.com/v1/' + type +'/' + playlist_id + '/tracks'
+            await AddTracks(url, node);
+            
+            loading.remove();
+            
+            ToggleEnableElements(playlist_id, false);
+        }
+      }
+
+      async function combine() {
+        const tracks = document.getElementsByClassName('Track');
+        const playlists = document.getElementsByClassName('Playlist');
+        let nodes = [];
+        
+        for (var i = 0; i < playlists.length; i++)
+        {
+          const node = playlists[i];
+          const child = node.children[0].children[2].children[0];
+          if (!child.checked)
+            continue;
+
+          const trackDiv = node.children[1];
+          if (trackDiv.childElementCount > 0)
+            continue;
+          
+          const url = 'https://api.spotify.com/v1/playlists/' + node.id + '/tracks';
+          const items = await GetTracks(url);
+          nodes = nodes.concat(items);
+        }
+
+        for (var i = 0; i < tracks.length; i++)
+        {
+          const node = tracks[i];
+          const child = node.children[0];
+          if (!child.checked)
+            continue;
+
+          child.checked = false;
+          nodes.push(node.id);
+        }
+        
+        const track_element = document.getElementsByName('tracks')[0];
+        track_element.value = nodes;
+    }
+      
+      document.addEventListener('submit', (e) => {
+          e.preventDefault();
+          
+          const form = e.target;
+          form.style.display = 'none';
+
+          const element = document.getElementById('loading');
+          element.style.display = 'block';
+          
+          combine().then(() => {
+              HTMLFormElement.prototype.submit.call(form);
+          });
+      });
+
+  </script>
+</body>
+</html>
