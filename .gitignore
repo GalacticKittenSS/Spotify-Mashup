@@ -1,5 +1,6 @@
 #Files
 .env
+aws_deploy_results.json
 
 #Directories
 __pycache__/
