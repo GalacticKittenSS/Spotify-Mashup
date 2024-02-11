@@ -2,8 +2,9 @@ import os
 import logging
 import json
 import boto3
+import base64
 
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl
 
 import string
 import random
@@ -11,7 +12,7 @@ import random
 import Spotify
 
 #Redirect URL
-redirect_uri = f'https://s45zbyckyzejd52pj4jgq3floe0znjfl.lambda-url.eu-west-2.on.aws'
+redirect_uri = f'https://minofhoodkvpeuntldj326inzq0lacnc.lambda-url.eu-west-2.on.aws'
 
 # Spotify Setup
 client_id = os.environ['CLIENT_ID']
@@ -93,7 +94,7 @@ class RequestHandler:
             user = Spotify.User(key)
             #user = SpotifyApp.GetUserFromKey(key)
             
-            self.MashupFromQuery(user, queries)
+            self.MashupFromQuery(user, self.Queries)
             self.Content = self.Redirect(redirect_uri + f'?user={key}')
     
     def do_GET(self):
@@ -104,7 +105,7 @@ class RequestHandler:
             user = Spotify.User(key)
             #user = SpotifyApp.GetUserFromKey(key)
             
-            self.MashupFromQuery(user, queries)
+            self.MashupFromQuery(user, self.Queries)
             self.Content = self.Redirect(redirect_uri + f'?user={key}')
             
         # Redirect from form submit
@@ -141,23 +142,23 @@ class RequestHandler:
         if not query.get('playlist_name'):
             return None
             
-        track_query = self.GetQuery(query, 'tracks')
+        track_query = self.GetQuery('tracks')
         if track_query:
             tracks = track_query.split(',');
             track_uris = [Spotify.Track(id, user).URI for id in tracks]
             
             return CreateMashupFromTracks(user, 
-                query.get('playlist_name')[0], "",
+                query.get('playlist_name'), "",
                 track_uris
             )
         
-        playlist_query = self.GetQuery(query, 'playlists')
+        playlist_query = self.GetQuery('playlists')
         if playlist_query:
             playlists = playlist_query.split(',')
             spotify_playlists = [Spotify.Playlist(id, user) for id in playlists]
             
             return CreateMashupFromPlaylists(user, 
-                query.get('playlist_name')[0],
+                query.get('playlist_name'),
                 spotify_playlists
             )
 
@@ -183,7 +184,7 @@ class RequestHandler:
     
         # File Information
         bucket_name = "galactickittenss"
-        file_name = "index.html"
+        file_name = "Spotify.html"
 
         # Amazon S3
         s3 = boto3.resource('s3',region_name='eu-west-2', aws_access_key_id='AKIARELLV3ZAPGKQHHFI', aws_secret_access_key='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')
@@ -203,6 +204,8 @@ logging.basicConfig(level=logging.DEBUG,
 # event: JSON data
 # context: AWS object
 def lambda_handler(event, context):
+    print("Received Event: ", event)
+
     if not event.get('requestContext'):
         return CreateResponse(502, { "Error message": "Invalid request structure" }, "application/json")
     
@@ -217,15 +220,26 @@ def lambda_handler(event, context):
     queries = {}
     if event.get('queryStringParameters'):
         queries = event['queryStringParameters']
-        print(queries)
+
+    elif event.get('body'):
+        body = event['body']
+        if event['isBase64Encoded'] == True:
+            body = str(base64.b64decode(body), 'utf-8')
+            print("Raw Decoded Body: ", body)
+        
+        queries = dict(parse_qsl(body))
+
+    print("with arguments: ", queries)
 
     handler = RequestHandler(queries, event['rawPath'])
     
     method = http['method']
     if method == "GET":
+        print("Handling GET Request")
         handler.do_GET()
 
     if method == "POST":
+        print("Handling POST Request")
         handler.do_POST()
 
     return CreateResponse(200, handler.Content, "text/html")
