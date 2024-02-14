@@ -10,8 +10,12 @@ import random
 
 import Spotify
 
-#Redirect URL
-redirect_uri = f'https://s45zbyckyzejd52pj4jgq3floe0znjfl.lambda-url.eu-west-2.on.aws'
+# Redirect URL
+redirect_uri = os.environ['AWS_URL']
+
+# AWS Bucket Info (Webpage src)
+bucket_name = os.environ['AWS_BUCKET']
+file_name = os.environ['AWS_FILEPATH']
 
 # Spotify Setup
 client_id = os.environ['CLIENT_ID']
@@ -175,11 +179,6 @@ class RequestHandler:
 </div>
 """
             body = body + perPlaylist
-
-    
-        # File Information
-        bucket_name = "galactickittenss"
-        file_name = "index.html"
 
         # Amazon S3
         s3 = boto3.resource('s3',region_name='eu-west-2', aws_access_key_id='AKIARELLV3ZAPGKQHHFI', aws_secret_access_key='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')
