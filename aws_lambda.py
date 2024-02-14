@@ -39,32 +39,26 @@ def GenerateRandomString(length: int):
     random.shuffle(letters)
     return "".join(letters)
 
-
-def CreateMashupFromPlaylists(user, playlist_name, albums):
+# Get All Tracks from playlists array
+def GetTracksFromPlaylists(playlists):
     tracks = []
-    album_names = ''
+    #album_names = ''
 
-    for p in albums:
-        album_names = album_names + p.GetName() + ", "
+    for p in playlists:
+        #album_names = album_names + p.GetName() + ", "
 
         songs = p.GetTracks()
         for s in songs:
             tracks.append(s.URI)
 
-    album_names = album_names[:-2] + "."
-    return CreateMashupFromTracks(user, 
-        playlist_name, f'A mashup of the playlists: {album_names}',
-        tracks
-    )
+    #album_names = album_names[:-2] + "."
+    return tracks
+    #AddTracksToPlaylist(final_playlist, tracks)
 
-def CreateMashupFromTracks(user, playlist_name, playlist_description, tracks):
-    playlist = user.CreatePlaylist(playlist_name, playlist_description)
-
+def AddTracksToPlaylist(playlist, tracks):
     request_list = [tracks[i:i + 100] for i in range(0, len(tracks), 100)]
     for uri in request_list:
         playlist.AddTracks(uri)
-    
-    return playlist
 
 class RequestHandler:
     Content = """
@@ -113,12 +107,13 @@ class RequestHandler:
             user = Spotify.User(key)
             #user = SpotifyApp.GetUserFromKey(key)
             
-            if not user:
-                self.Content = self.Redirect(redirect_uri)
-            else:
+            try:
                 albums = user.GetPlaylists()
                 self.Content = self.ShowPlaylists(albums, key, user.AccessToken)
-        
+            except Exception as error:
+                print("Redirecting user due to error:", error)
+                self.Content = self.Redirect(redirect_url)
+
         # User logged in (authorization code sent)
         elif self.Path == "/callback":
             code = self.GetQuery('code')
@@ -141,25 +136,26 @@ class RequestHandler:
         if not query.get('playlist_name'):
             return None
             
-        track_query = self.GetQuery(query, 'tracks')
-        if track_query:
-            tracks = track_query.split(',');
-            track_uris = [Spotify.Track(id, user).URI for id in tracks]
-            
-            return CreateMashupFromTracks(user, 
-                query.get('playlist_name')[0], "",
-                track_uris
-            )
+        tracks = []
         
-        playlist_query = self.GetQuery(query, 'playlists')
-        if playlist_query:
-            playlists = playlist_query.split(',')
-            spotify_playlists = [Spotify.Playlist(id, user) for id in playlists]
+        # Add tracks from Query
+        track_query = query.get('tracks')
+        if track_query:
+            track_ids = track_query.split(',');
+            tracks += [Spotify.Track(id, user).URI for id in track_ids]
             
-            return CreateMashupFromPlaylists(user, 
-                query.get('playlist_name')[0],
-                spotify_playlists
-            )
+        # Add tracks from queried playlists
+        playlist_query = query.get('playlists')
+        if playlist_query:
+            playlist_ids = playlist_query.split(',')
+            playlists = [Spotify.Playlist(id, user) for id in playlists]            
+            tracks += GetTracksFromPlaylists(playlists)
+        
+        # Create Playlist
+        print("Adding", len(tracks), "tracks to playlist", self.GetQuery('playlist_name'))
+        playlist = user.CreatePlaylist(query.get('playlist_name'), "")
+        AddTracksToPlaylist(playlist, tracks)
+        return playlist
 
     def ShowPlaylists(self, albums, key, access_token):
         body = ""
