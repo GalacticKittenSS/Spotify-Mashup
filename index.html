@@ -226,10 +226,12 @@
           if (!child.checked)
             continue;
 
+		  // Check that tracks haven't been loaded
           const trackDiv = node.children[1];
           if (trackDiv.childElementCount > 0)
-            continue;
+            continue; // tracks have been pre-loaded
           
+		  // Get all playlist tracks
           const url = 'https://api.spotify.com/v1/playlists/' + node.id + '/tracks';
           const items = await GetTracks(url);
           nodes = nodes.concat(items);
@@ -238,7 +240,7 @@
         for (var i = 0; i < tracks.length; i++)
         {
           const node = tracks[i];
-          const child = node.children[0];
+          const child = node.children[1];
           if (!child.checked)
             continue;
 
