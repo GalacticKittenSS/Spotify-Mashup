@@ -57,7 +57,6 @@ def GetTracksFromPlaylists(playlists):
 
     #album_names = album_names[:-2] + "."
     return tracks
-    #AddTracksToPlaylist(final_playlist, tracks)
 
 def AddTracksToPlaylist(playlist, tracks):
     request_list = [tracks[i:i + 100] for i in range(0, len(tracks), 100)]
@@ -75,9 +74,11 @@ class RequestHandler:
 </head>
 </html>
 """
-    def __init__(self, queries, path):
+    def __init__(self, queries, path, headers):
         self.Queries = queries
         self.Path = path
+        self.Headers = headers
+        self.ContentType = "text/html"
 
     def GetQuery(self, name):
         if self.Queries.get(name):
@@ -87,29 +88,42 @@ class RequestHandler:
     def do_POST(self):
         # 'Create Playlist' form submitted
         if self.Path == "/submit":
-            key = self.GetQuery('user')
+            key = self.Headers.get('user')
             user = Spotify.User(key)
-            #user = SpotifyApp.GetUserFromKey(key)
             
-            self.MashupFromQuery(user, queries)
-            self.Content = self.Redirect(redirect_uri + f'?user={key}')
-    
+            playlist = self.MashupFromQuery(user, self.Queries)
+            self.Content = json.dumps({ 'playlist': {'name': playlist.GetName(), 'id': playlist.ID, 'image': playlist.Image } });
+            self.ContentType = 'application/json'
+
     def do_GET(self):
+        self.ContentType = "text/html"
         
-        # 'Create Playlist' form submitted
-        if self.Path == "/submit":
-            key = self.GetQuery('user')
+        # GET tracks in playlist [JSON]
+        if self.Path == "/tracks":
+            key = self.Headers.get('user')
             user = Spotify.User(key)
-            #user = SpotifyApp.GetUserFromKey(key)
             
-            self.MashupFromQuery(user, queries)
-            self.Content = self.Redirect(redirect_uri + f'?user={key}')
+            playlist_id = self.GetQuery('playlist_id')
+            playlist = Spotify.Playlist(playlist_id, user)
             
-        # Redirect from form submit
+            # TODO: Use pages
+            self.Content = json.dumps({ 'items': [{ "id": track.ID, "name": track.GetName() } for track in playlist.GetTracks()], 'next': '' })
+            self.ContentType = 'application/json'
+        
+        # 'Create Playlist' form submitted [JSON]
+        elif self.Path == "/submit":
+            key = self.Headers.get('user')
+            user = Spotify.User(key)
+            
+            playlist = self.MashupFromQuery(user, self.Queries)
+            #TODO: Fix image
+            self.Content = json.dumps({ 'playlist': {'name': playlist.GetName(), 'id': playlist.ID, 'image': playlist.Image } });
+            self.ContentType = 'application/json'
+        
+        # Redirect from User Login [HTML]
         elif self.Queries.get('user'):
             key = self.GetQuery('user')
             user = Spotify.User(key)
-            #user = SpotifyApp.GetUserFromKey(key)
             
             try:
                 albums = user.GetPlaylists()
@@ -118,7 +132,7 @@ class RequestHandler:
                 print("Redirecting user due to error:", error)
                 self.Content = self.Redirect(redirect_url)
 
-        # User logged in (authorization code sent)
+        # User logged in (authorization code sent) [HTML]
         elif self.Path == "/callback":
             code = self.GetQuery('code')
             user = SpotifyApp.GetUser(code)
@@ -129,7 +143,7 @@ class RequestHandler:
             
             self.Content = self.Redirect(redirect_uri + f'?user={user.AccessToken}')
 
-        # Redirect to login
+        # Redirect to Spotify (get authorization code) [HTML]
         else:
             self.Content = self.Redirect(SpotifyApp.GetRedirectURL())
 
@@ -156,7 +170,7 @@ class RequestHandler:
             tracks += GetTracksFromPlaylists(playlists)
         
         # Create Playlist
-        print("Adding", len(tracks), "tracks to playlist", self.GetQuery('playlist_name'))
+        print("Creating playlist", self.GetQuery('playlist_name'), "with", len(tracks), "tracks");
         playlist = user.CreatePlaylist(query.get('playlist_name'), "")
         AddTracksToPlaylist(playlist, tracks)
         return playlist
@@ -223,4 +237,4 @@ def lambda_handler(event, context):
     if method == "POST":
         handler.do_POST()
 
-    return CreateResponse(200, handler.Content, "text/html")
+    return CreateResponse(200, handler.Content, handler.ContentType)
