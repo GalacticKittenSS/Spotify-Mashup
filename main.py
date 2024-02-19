@@ -3,6 +3,7 @@ from urllib.parse import urlparse, parse_qs
 
 import string
 import random
+import json
 
 import os
 from dotenv import load_dotenv
@@ -70,6 +71,8 @@ class RequestHandler(BaseHTTPRequestHandler):
 </html>
 """
 
+    ContentType = "text/html"
+
     def GetQuery(self, query, name):
         if query.get(name):
             return query.get(name)[0]
@@ -80,7 +83,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def _send_headers(self):
         self.send_response(200)
-        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Type", self.ContentType)
         self.end_headers()
 
     def _send_content(self):
@@ -88,19 +91,22 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self._get_path()
+        self.ContentType = 'text/html'
 
         # Get Post Body
         content_len = int(self.headers.get('Content-Length'))
         post_body = self.rfile.read(content_len)
         queries = parse_qs(post_body.decode('utf-8'))
 
-        # 'Create Playlist' form submitted
+        # 'Create Playlist' form submitted [JSON]
         if path.path == "/submit":
-            key = self.GetQuery(queries, 'user')
+            key = self.headers.get('user')
             user = SpotifyApp.GetUserFromKey(key)
             
-            self.MashupFromQuery(user, queries)
-            self.Content = self.Redirect(redirect_uri + f'?user={key}')
+            playlist = self.MashupFromQuery(user, queries)
+            #TODO: Fix image
+            self.Content = json.dumps({ 'playlist': {'name': playlist.GetName(), 'id': playlist.ID, 'image': playlist.Image } });
+            self.ContentType = 'application/json'
 
         self._send_headers()
         self._send_content()
@@ -108,27 +114,43 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self._get_path()
         queries = parse_qs(path.query)
+        self.ContentType = 'text/html'
 
-        # 'Create Playlist' form submitted
-        if path.path == "/submit":
-            key = self.GetQuery(queries, 'user')
+        # GET tracks in playlist [JSON]
+        if path.path == "/tracks":
+            key = self.headers.get('user')
             user = SpotifyApp.GetUserFromKey(key)
             
-            self.MashupFromQuery(user, queries)
-            self.Content = self.Redirect(redirect_uri + f'?user={key}')
+            playlist_id = self.GetQuery(queries, 'playlist_id')
+            playlist = Spotify.Playlist(playlist_id, user)
             
-        # Redirect from form submit
+            # TODO: Use pages
+            self.Content = json.dumps({ 'items': [{ "id": track.ID, "name": track.GetName() } for track in playlist.GetTracks()], 'next': '' })
+            self.ContentType = 'application/json'
+        
+        # 'Create Playlist' form submitted [JSON]
+        elif path.path == "/submit":
+            key = self.headers.get('user')
+            user = SpotifyApp.GetUserFromKey(key)
+            
+            playlist = self.MashupFromQuery(user, queries)
+            self.Content = json.dumps({ 'playlist': {'name': playlist.GetName(), 'id': playlist.ID, 'image': playlist.Image } });
+            self.ContentType = 'application/json'
+
+        # Redirect from User Login [HTML]
         elif queries.get('user'):
             key = self.GetQuery(queries, 'user')
             user = SpotifyApp.GetUserFromKey(key)
             
-            if not user:
-                self.Content = self.Redirect(redirect_uri)
-            else:
+            # TODO: Refresh token if user exists
+            try:
                 albums = user.GetPlaylists()
                 self.Content = self.ShowPlaylists(albums, key, user.AccessToken)
-        
-        # User logged in (authorization code sent)
+            except Exception as error:
+                print("Redirecting user due to error:", error)
+                self.Content = self.Redirect(redirect_uri)
+            
+        # User logged in (authorization code sent) [HTML]
         elif path.path == "/callback":
             code = self.GetQuery(queries, 'code')
             user = SpotifyApp.GetUser(code)
@@ -139,7 +161,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             
             self.Content = self.Redirect(redirect_uri + f'?user={key}')
 
-        # Redirect to login
+        # Redirect to Spotify (get authorization code) [HTML]
         else:
             self.Content = self.Redirect(SpotifyApp.GetRedirectURL())
 

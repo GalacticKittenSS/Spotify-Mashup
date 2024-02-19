@@ -35,7 +35,10 @@ class Album:
 
     album = Album(response['id'], app)
     album.Name = response['name']
-    album.Image = response['images'][0]['url']
+    
+    if len(response['images']) > 0:
+        album.Image = response['images'][0]['url']
+    
     return album
 
   def GetTracks(self):
@@ -75,7 +78,10 @@ class Playlist:
 
     playlist = Playlist(response['id'], app)
     playlist.Name = response['name']
-    playlist.Image = response['images'][0]['url']
+    
+    if len(response['images']) > 0:
+        playlist.Image = response['images'][0]['url']
+    
     return playlist
 
   def GetTracks(self):

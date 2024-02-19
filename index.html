@@ -110,12 +110,15 @@
     <p>Loading...</p>
   </div>
   <script>
+      let params = (new URL(document.location)).searchParams;
+      let AccessToken = '{key}';
+	  
       async function GetTracks(next_url) {
           items = [];
           while (next_url) {
               const payload = {
                 method: 'GET',
-                headers: { 'Authorization': 'Bearer {token}' },
+                headers: { 'user': AccessToken },
               };
 
               const response = await fetch(next_url, payload)
@@ -123,7 +126,7 @@
               const tracks = data['items'];
 
               for (let i = 0; i < tracks.length; i++)
-                  items.push(tracks[i]['track']['id']);
+                  items.push(tracks[i]['id']);
               
               next_url = data['next'];
           }
@@ -135,12 +138,12 @@
         while (next_url) {
           const payload = {
             method: 'GET',
-            headers: { 'Authorization': 'Bearer {token}' },
+            headers: { 'user': AccessToken },
           };
 
           const response = await fetch(next_url, payload)
           const data = await response.json()
-              
+
           const items = data['items'];
           for (var i = 0; i < items.length; i++) {
             let track = items[i];
@@ -162,7 +165,6 @@
             div.appendChild(label);
             div.appendChild(input);
 
-            //const form = document.getElementsByTagName('form')[0];
             playlist.appendChild(div);
           } 
           
@@ -205,12 +207,13 @@
             node.appendChild(div);
             node.style.display = 'block';
 
-            const url = 'https://api.spotify.com/v1/' + type +'/' + playlist_id + '/tracks'
+            const url = "/tracks?playlist_id=" + playlist_id; 
             await AddTracks(url, node);
             
             loading.remove();
             
-            ToggleEnableElements(playlist_id, false);
+            const checkbox = playlist.children[0].children[2].children[0];
+            ToggleEnableElements(playlist_id, checkbox.checked);
         }
       }
 
@@ -218,7 +221,7 @@
         const tracks = document.getElementsByClassName('Track');
         const playlists = document.getElementsByClassName('Playlist');
         let nodes = [];
-        
+
         for (var i = 0; i < playlists.length; i++)
         {
           const node = playlists[i];
@@ -226,11 +229,13 @@
           if (!child.checked)
             continue;
 
+		  // Check that tracks haven't been loaded
           const trackDiv = node.children[1];
           if (trackDiv.childElementCount > 0)
-            continue;
+            continue; // tracks have been pre-loaded
           
-          const url = 'https://api.spotify.com/v1/playlists/' + node.id + '/tracks';
+		  // Get all playlist tracks
+          const url = "/tracks?playlist_id=" + node.id;
           const items = await GetTracks(url);
           nodes = nodes.concat(items);
         }
@@ -238,7 +243,7 @@
         for (var i = 0; i < tracks.length; i++)
         {
           const node = tracks[i];
-          const child = node.children[0];
+          const child = node.children[1];
           if (!child.checked)
             continue;
 
@@ -248,8 +253,71 @@
         
         const track_element = document.getElementsByName('tracks')[0];
         track_element.value = nodes;
-    }
+      }
       
+      async function handle_submit(form) {
+		await combine();
+		
+		const playlist_name = document.getElementsByName("playlist_name")[0].value;
+		const tracks = document.getElementsByName("tracks")[0].value;
+		
+		const payload = {
+			method: "POST",
+			headers: { "user": AccessToken },
+			body: "playlist_name=" + playlist_name + "&tracks=" + tracks,
+			isBase64Encoded: false,
+		};
+		
+		const result = await fetch("/submit", payload);
+		// TODO: Error Handling
+		const data = (await result.json())['playlist'];
+		
+		// Create new playlist elements from response
+		const playlist = document.createElement('div');
+		playlist.className = "Playlist";
+		playlist.id = data['id'];
+		playlist.setAttribute('name', data['id']);
+		
+		const element = document.getElementsByClassName('Playlist')[0];
+		form.insertBefore(playlist, element);
+		
+		const centre = document.createElement('div');
+		centre.className = "centre";
+		playlist.appendChild(centre);
+		
+		const image = document.createElement('img');
+		image.className = "playlist-preview";
+		image.src = data['image'];
+		centre.appendChild(image);
+		
+		const label = document.createElement('div');
+		label.className = "label";
+		centre.appendChild(label);
+		
+		const header = document.createElement('h4');
+		header.addEventListener("click", () => {
+			ToggleShowElements(data['id'], 'playlists');
+		});
+		header.innerHTML = data['name'];
+		label.appendChild(header);
+		
+		const checkbox = document.createElement('div');
+		checkbox.className = 'checkbox';
+		centre.appendChild(checkbox);
+		
+		const input = document.createElement('input');
+		input.type = "checkbox";
+		input.addEventListener("click", () => {
+			ToggleEnableElements(data['id'], input.checked);
+		});
+		checkbox.appendChild(input);
+		
+		const track_div = document.createElement('div');
+		track_div.className = "Tracks";
+		track_div.style = "display: none";
+		playlist.appendChild(track_div);
+	  }
+	  
       document.addEventListener('submit', (e) => {
           e.preventDefault();
           
@@ -258,9 +326,10 @@
 
           const element = document.getElementById('loading');
           element.style.display = 'block';
-          
-          combine().then(() => {
-              HTMLFormElement.prototype.submit.call(form);
+
+          handle_submit(form).then(() => {
+			form.style.display = 'block';
+			element.style.display = 'none';
           });
       });
 

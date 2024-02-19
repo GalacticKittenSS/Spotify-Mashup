@@ -2,7 +2,7 @@
 cd ..
 
 echo Installing Requests to Zip...
-pip install requests -t aws_deploy
+pip install requests --no-user --target aws_deploy
 
 echo Copying Files to Zip...
 copy aws_lambda.py aws_deploy

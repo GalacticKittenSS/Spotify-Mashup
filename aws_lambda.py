@@ -11,8 +11,12 @@ import random
 
 import Spotify
 
-#Redirect URL
-redirect_uri = f'https://minofhoodkvpeuntldj326inzq0lacnc.lambda-url.eu-west-2.on.aws'
+# Redirect URL
+redirect_uri = os.environ['AWS_URL']
+
+# AWS Bucket Info (Webpage src)
+bucket_name = os.environ['AWS_BUCKET']
+file_name = os.environ['AWS_FILEPATH']
 
 # Spotify Setup
 client_id = os.environ['CLIENT_ID']
@@ -40,32 +44,25 @@ def GenerateRandomString(length: int):
     random.shuffle(letters)
     return "".join(letters)
 
-
-def CreateMashupFromPlaylists(user, playlist_name, albums):
+# Get All Tracks from playlists array
+def GetTracksFromPlaylists(playlists):
     tracks = []
-    album_names = ''
+    #album_names = ''
 
-    for p in albums:
-        album_names = album_names + p.GetName() + ", "
+    for p in playlists:
+        #album_names = album_names + p.GetName() + ", "
 
         songs = p.GetTracks()
         for s in songs:
             tracks.append(s.URI)
 
-    album_names = album_names[:-2] + "."
-    return CreateMashupFromTracks(user, 
-        playlist_name, f'A mashup of the playlists: {album_names}',
-        tracks
-    )
+    #album_names = album_names[:-2] + "."
+    return tracks
 
-def CreateMashupFromTracks(user, playlist_name, playlist_description, tracks):
-    playlist = user.CreatePlaylist(playlist_name, playlist_description)
-
+def AddTracksToPlaylist(playlist, tracks):
     request_list = [tracks[i:i + 100] for i in range(0, len(tracks), 100)]
     for uri in request_list:
         playlist.AddTracks(uri)
-    
-    return playlist
 
 class RequestHandler:
     Content = """
@@ -78,9 +75,11 @@ class RequestHandler:
 </head>
 </html>
 """
-    def __init__(self, queries, path):
+    def __init__(self, queries, path, headers):
         self.Queries = queries
         self.Path = path
+        self.Headers = headers
+        self.ContentType = "text/html"
 
     def GetQuery(self, name):
         if self.Queries.get(name):
@@ -90,37 +89,51 @@ class RequestHandler:
     def do_POST(self):
         # 'Create Playlist' form submitted
         if self.Path == "/submit":
-            key = self.GetQuery('user')
+            key = self.Headers.get('user')
             user = Spotify.User(key)
-            #user = SpotifyApp.GetUserFromKey(key)
             
-            self.MashupFromQuery(user, self.Queries)
-            self.Content = self.Redirect(redirect_uri + f'?user={key}')
-    
+            playlist = self.MashupFromQuery(user, self.Queries)
+            self.Content = json.dumps({ 'playlist': {'name': playlist.GetName(), 'id': playlist.ID, 'image': playlist.Image } });
+            self.ContentType = 'application/json'
+
     def do_GET(self):
+        self.ContentType = "text/html"
         
-        # 'Create Playlist' form submitted
-        if self.Path == "/submit":
-            key = self.GetQuery('user')
+        # GET tracks in playlist [JSON]
+        if self.Path == "/tracks":
+            key = self.Headers.get('user')
             user = Spotify.User(key)
-            #user = SpotifyApp.GetUserFromKey(key)
             
-            self.MashupFromQuery(user, self.Queries)
-            self.Content = self.Redirect(redirect_uri + f'?user={key}')
+            playlist_id = self.GetQuery('playlist_id')
+            playlist = Spotify.Playlist(playlist_id, user)
             
-        # Redirect from form submit
+            # TODO: Use pages
+            self.Content = json.dumps({ 'items': [{ "id": track.ID, "name": track.GetName() } for track in playlist.GetTracks()], 'next': '' })
+            self.ContentType = 'application/json'
+        
+        # 'Create Playlist' form submitted [JSON]
+        elif self.Path == "/submit":
+            key = self.Headers.get('user')
+            user = Spotify.User(key)
+            
+            playlist = self.MashupFromQuery(user, self.Queries)
+            #TODO: Fix image
+            self.Content = json.dumps({ 'playlist': {'name': playlist.GetName(), 'id': playlist.ID, 'image': playlist.Image } });
+            self.ContentType = 'application/json'
+        
+        # Redirect from User Login [HTML]
         elif self.Queries.get('user'):
             key = self.GetQuery('user')
             user = Spotify.User(key)
-            #user = SpotifyApp.GetUserFromKey(key)
             
-            if not user:
-                self.Content = self.Redirect(redirect_uri)
-            else:
+            try:
                 albums = user.GetPlaylists()
                 self.Content = self.ShowPlaylists(albums, key, user.AccessToken)
-        
-        # User logged in (authorization code sent)
+            except Exception as error:
+                print("Redirecting user due to error:", error)
+                self.Content = self.Redirect(redirect_url)
+
+        # User logged in (authorization code sent) [HTML]
         elif self.Path == "/callback":
             code = self.GetQuery('code')
             user = SpotifyApp.GetUser(code)
@@ -131,7 +144,7 @@ class RequestHandler:
             
             self.Content = self.Redirect(redirect_uri + f'?user={user.AccessToken}')
 
-        # Redirect to login
+        # Redirect to Spotify (get authorization code) [HTML]
         else:
             self.Content = self.Redirect(SpotifyApp.GetRedirectURL())
 
@@ -142,25 +155,26 @@ class RequestHandler:
         if not query.get('playlist_name'):
             return None
             
-        track_query = self.GetQuery('tracks')
-        if track_query:
-            tracks = track_query.split(',');
-            track_uris = [Spotify.Track(id, user).URI for id in tracks]
-            
-            return CreateMashupFromTracks(user, 
-                query.get('playlist_name'), "",
-                track_uris
-            )
+        tracks = []
         
-        playlist_query = self.GetQuery('playlists')
-        if playlist_query:
-            playlists = playlist_query.split(',')
-            spotify_playlists = [Spotify.Playlist(id, user) for id in playlists]
+        # Add tracks from Query
+        track_query = query.get('tracks')
+        if track_query:
+            track_ids = track_query.split(',');
+            tracks += [Spotify.Track(id, user).URI for id in track_ids]
             
-            return CreateMashupFromPlaylists(user, 
-                query.get('playlist_name'),
-                spotify_playlists
-            )
+        # Add tracks from queried playlists
+        playlist_query = query.get('playlists')
+        if playlist_query:
+            playlist_ids = playlist_query.split(',')
+            playlists = [Spotify.Playlist(id, user) for id in playlists]            
+            tracks += GetTracksFromPlaylists(playlists)
+        
+        # Create Playlist
+        print("Creating playlist", self.GetQuery('playlist_name'), "with", len(tracks), "tracks");
+        playlist = user.CreatePlaylist(query.get('playlist_name'), "")
+        AddTracksToPlaylist(playlist, tracks)
+        return playlist
 
     def ShowPlaylists(self, albums, key, access_token):
         body = ""
@@ -180,11 +194,6 @@ class RequestHandler:
 </div>
 """
             body = body + perPlaylist
-
-    
-        # File Information
-        bucket_name = "galactickittenss"
-        file_name = "Spotify.html"
 
         # Amazon S3
         s3 = boto3.resource('s3',region_name='eu-west-2', aws_access_key_id='AKIARELLV3ZAPGKQHHFI', aws_secret_access_key='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')
@@ -242,4 +251,4 @@ def lambda_handler(event, context):
         print("Handling POST Request")
         handler.do_POST()
 
-    return CreateResponse(200, handler.Content, "text/html")
+    return CreateResponse(200, handler.Content, handler.ContentType)
