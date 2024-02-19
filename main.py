@@ -173,6 +173,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def MashupFromQuery(self, user, query):
         if not query.get('playlist_name'):
+            print('No name detected, skipping playlist creation!')
             return None
             
         track_query = self.GetQuery(query, 'tracks')
