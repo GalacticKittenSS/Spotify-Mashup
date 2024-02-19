@@ -93,8 +93,14 @@ class RequestHandler:
             key = self.Headers.get('user')
             user = Spotify.User(key)
             
-            playlist = self.MashupFromQuery(user, self.Queries)
-            self.Content = json.dumps({ 'playlist': {'name': playlist.GetName(), 'id': playlist.ID, 'image': playlist.Image } });
+            try:
+                playlist = self.MashupFromQuery(user, self.Queries)
+                image = user.__request__(f'playlists/{playlist.ID}')['images'][0]
+                self.Content = json.dumps({ 'playlist': {'name': playlist.GetName(), 'id': playlist.ID, 'image': image['url'] } })
+            except Exception as error:
+                print('Could not create mashup playlist due to error:', error)
+                self.Content = json.dumps({ 'error': 'Could not create playlist' })
+
             self.ContentType = 'application/json'
 
     def do_GET(self):
@@ -117,11 +123,16 @@ class RequestHandler:
             key = self.Headers.get('user')
             user = Spotify.User(key)
             
-            playlist = self.MashupFromQuery(user, self.Queries)
-            #TODO: Fix image
-            self.Content = json.dumps({ 'playlist': {'name': playlist.GetName(), 'id': playlist.ID, 'image': playlist.Image } });
+            try:
+                playlist = self.MashupFromQuery(user, self.Queries)
+                image = user.__request__(f'playlists/{playlist.ID}')['images'][0]
+                self.Content = json.dumps({ 'playlist': {'name': playlist.GetName(), 'id': playlist.ID, 'image': image['url'] } });
+            except Exception as error:
+                print('Could not create mashup playlist due to error:', error)
+                self.Content = json.dumps({ 'error': 'Could not create playlist' })
+            
             self.ContentType = 'application/json'
-        
+
         # Redirect from User Login [HTML]
         elif self.Queries.get('user'):
             key = self.GetQuery('user')
