@@ -1,7 +1,7 @@
 import os
 import logging
 import json
-import boto3
+#import boto3
 import base64
 
 from urllib.parse import parse_qsl
@@ -12,7 +12,7 @@ import random
 import Spotify
 
 # Redirect URL
-redirect_uri = os.environ['AWS_URL']
+redirect_url = os.environ['AWS_URL']
 
 # AWS Bucket Info (Webpage src)
 bucket_name = os.environ['AWS_BUCKET']
@@ -21,7 +21,7 @@ file_name = os.environ['AWS_FILEPATH']
 # Spotify Setup
 client_id = os.environ['CLIENT_ID']
 client_secret = os.environ['CLIENT_SECRET']
-SpotifyApp = Spotify.Application(client_id, client_secret, redirect_uri + '/callback')
+SpotifyApp = Spotify.Application(client_id, client_secret, redirect_url + '/callback')
 
 def CreateResponse(status_code, data, content_type):
     return {
@@ -61,6 +61,7 @@ def GetTracksFromPlaylists(playlists):
 
 def AddTracksToPlaylist(playlist, tracks):
     request_list = [tracks[i:i + 100] for i in range(0, len(tracks), 100)]
+    
     for uri in request_list:
         playlist.AddTracks(uri)
 
@@ -142,7 +143,7 @@ class RequestHandler:
             #key = GenerateRandomString(32)
             #SpotifyApp.CreateUserKey(user, key)
             
-            self.Content = self.Redirect(redirect_uri + f'?user={user.AccessToken}')
+            self.Content = self.Redirect(redirect_url + f'?user={user.AccessToken}')
 
         # Redirect to Spotify (get authorization code) [HTML]
         else:
