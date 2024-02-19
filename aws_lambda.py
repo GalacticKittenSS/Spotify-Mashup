@@ -1,7 +1,7 @@
 import os
 import logging
 import json
-#import boto3
+import boto3
 import base64
 
 from urllib.parse import parse_qsl
@@ -241,7 +241,7 @@ def lambda_handler(event, context):
 
     print("with arguments: ", queries)
 
-    handler = RequestHandler(queries, event['rawPath'])
+    handler = RequestHandler(queries, event['rawPath'], event['headers'])
     
     method = http['method']
     if method == "GET":
