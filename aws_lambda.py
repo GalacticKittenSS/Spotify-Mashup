@@ -18,6 +18,10 @@ redirect_url = os.environ['AWS_URL']
 bucket_name = os.environ['AWS_BUCKET']
 file_name = os.environ['AWS_FILEPATH']
 
+# AWS Access Token
+aws_id = os.environ['AWS_ID']
+aws_secret = os.environ['AWS_SECRET']
+
 # Spotify Setup
 client_id = os.environ['CLIENT_ID']
 client_secret = os.environ['CLIENT_SECRET']
@@ -208,7 +212,7 @@ class RequestHandler:
             body = body + perPlaylist
 
         # Amazon S3
-        s3 = boto3.resource('s3',region_name='eu-west-2', aws_access_key_id='AKIARELLV3ZAPGKQHHFI', aws_secret_access_key='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')
+        s3 = boto3.resource('s3',region_name='eu-west-2', aws_access_key_id=aws_id, aws_secret_access_key=aws_secret)
         obj = s3.Object(bucket_name, file_name)
         html = str(obj.get()['Body'].read(), encoding='utf-8')
         logging.debug(html)
