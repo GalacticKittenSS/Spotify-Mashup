@@ -1,5 +1,6 @@
 from urllib.parse import urlencode
 import requests
+from base64 import b64encode
 
 
 class Track:
@@ -31,7 +32,8 @@ class Album:
     self.Type = 'albums'
 
   def FromResponse(response, app):
-    response = response.get('album')
+    if response.get('album'):
+      response = response.get('album')
 
     album = Album(response['id'], app)
     album.Name = response['name']
@@ -165,7 +167,7 @@ class User:
     response = requests.post(url, headers=headers, json=data)
     response_content = response.json()
 
-    if response.status_code != 201:
+    if response.status_code != 200 and response.status_code != 201:
       raise Exception(response_content['error'])
 
     return response_content
@@ -189,6 +191,7 @@ class Application:
     self.ClientID = client_id
     self.ClientSecret = client_secret
     self.RedirectURI = redirect_uri
+    self.AccessToken = self.__get_client_access_token(client_id, client_secret)
 
   def GetUser(self, authorization_code):
     return User(self._get_access_token(authorization_code))
@@ -232,3 +235,22 @@ class Application:
       return response['access_token']
     else:
       raise Exception("Access Token Error", response['error_description'])
+    
+  def __get_client_access_token(self, client_id, client_secret):
+    headers = { 
+      'Authorization': 'Basic ' + b64encode((client_id + ':' + client_secret).encode('ascii')).decode('ascii'),
+      'Content-Type': 'application/x-www-form-urlencoded',
+    }
+    response = requests.post('https://accounts.spotify.com/api/token?grant_type=client_credentials', headers=headers)
+    return response.json()['access_token']
+
+  def __request__(self, url: str, headers: dict = {}):
+    url = User.API_URL + url
+    headers['Authorization'] = f'Bearer {self.AccessToken}'
+    response = requests.get(url, headers=headers)
+    response_content = response.json()
+
+    if response.status_code != 200:
+      raise Exception(response_content['error'])
+
+    return response_content

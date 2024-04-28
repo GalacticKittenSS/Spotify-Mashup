@@ -17,6 +17,7 @@ redirect_url = os.environ['AWS_URL']
 # AWS Bucket Info (Webpage src)
 bucket_name = os.environ['AWS_BUCKET']
 file_name = os.environ['AWS_FILEPATH']
+preview_file = os.environ['AWS_PREVIEW']
 
 # AWS Access Token
 aws_id = os.environ['AWS_ID']
@@ -160,7 +161,13 @@ class RequestHandler:
             
             self.Content = self.Redirect(redirect_url + f'?user={user.AccessToken}')
 
-        # Redirect to Spotify (get authorization code) [HTML]
+        # Preview website with Spotify's top playlist [HTML]
+        elif self.Path == "/preview":
+            response = SpotifyApp.__request__('browse/categories/toplists/playlists/')
+            albums = [Spotify.Album.FromResponse(r, SpotifyApp) for r in response['playlists']['items']]
+            self.Content = self.ShowPlaylists(albums, SpotifyApp.AccessToken, SpotifyApp.AccessToken)
+
+        # Read File
         else:
             self.Content = self.Redirect(SpotifyApp.GetRedirectURL())
 
@@ -183,7 +190,7 @@ class RequestHandler:
         playlist_query = query.get('playlists')
         if playlist_query:
             playlist_ids = playlist_query.split(',')
-            playlists = [Spotify.Playlist(id, user) for id in playlists]            
+            playlists = [Spotify.Playlist(id, user) for id in playlist_ids]            
             tracks += GetTracksFromPlaylists(playlists)
         
         # Create Playlist
@@ -213,10 +220,10 @@ class RequestHandler:
 
         # Amazon S3
         s3 = boto3.resource('s3',region_name='eu-west-2', aws_access_key_id=aws_id, aws_secret_access_key=aws_secret)
-        obj = s3.Object(bucket_name, file_name)
+        file = preview_file if self.Path == "/preview" else file_name
+        obj = s3.Object(bucket_name, file)
         html = str(obj.get()['Body'].read(), encoding='utf-8')
-        logging.debug(html)
-
+        
         html = html.replace('{body}', body)
         html = html.replace('{key}', key)
         html = html.replace('{token}', access_token)

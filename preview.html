@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Mashup</title>
+
+    <style type="text/css">
+      :root {
+          --margin: 0.5rem;
+      }
+
+      body {
+          color: white;
+          background: rgb(20, 20, 20);
+      }
+
+      input[type="checkbox"] {
+          margin: 0 var(--margin);
+          padding: 0;
+          width: 2rem;
+          height: 2rem;
+      }
+
+      .label {
+          display: block;
+          width: 100%;
+          font-size: 1.1em;
+          margin: 0;
+      }
+
+      .Playlist {
+          margin: 1.05rem var(--margin);
+          padding: 0.15rem;
+          background: rgb(60, 60, 60);
+      }
+
+      #loading {
+          margin: 1.05rem var(--margin);
+          padding: 0.15rem;
+          height: 4rem;
+          align-items: center;
+          text-align: center;
+          color: grey;
+          background: rgb(45, 45, 45);
+      }
+
+      .Playlist h4 {
+          font-size: 1.2em;
+          margin: 12px 0px 12px 0px;
+      }
+
+      .Tracks {
+          padding: var(--margin);
+          background: rgb(45, 45, 45);
+      }
+
+      .Track {
+          display: flex;
+          align-items: center;
+          margin-bottom: var(--margin);
+      }
+
+      .Track input[type="checkbox"] {
+          width: 1.2rem;
+          height: 1.2rem;
+          margin-right: 0;
+      }
+
+      .playlist-preview {
+          height: 4rem;
+          margin: 0.25rem;
+      }
+
+      .playlist-info {
+          margin: var(--margin);
+      }
+
+      .playlist-info p {
+          margin: 0.4rem;
+      }
+
+      .playlist-info input {
+          border: 0;
+          width: 50%;
+          height: max(5vw, 2rem);
+          background: rgb(60, 60, 60);
+          color: white;
+          font-size: max(2.5vw, 1.2rem);
+          text-align: center;
+      }
+
+      .centre {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+      }
+
+      .warning {
+        border: solid;
+        border-width: 1px;
+        border-radius: 10px;
+        border-color: red;
+        padding: 10px;
+        color: red;
+        background-color: rgb(60, 30, 30);
+      }
+
+      .warning p {
+        padding: 0px;
+        margin: 0px;
+        text-align: center;
+      }
+    </style>
+  </head>
+<body>
+    <div class="warning">
+      <p class="centre">WARNING: THIS WEBPAGE IS A PREVIEW AND IS NOT FUNCTIONAL</p>
+    </div>
+
+    <h1 class="centre">Spotify Playlist Mashup</h1>
+
+    <form action="/submit" method="post">
+        <div class="playlist-info centre">
+            <input type="text" name="playlist_name" placeholder="Playlist Name" maxlength="100" required="">
+            <p></p>
+            <input type="submit" value="Create Playlist">
+        </div>
+
+        <div id="loading" class="centre" style="display: none;">
+            <p>Loading...</p>
+        </div>
+
+        {body}
+        
+        <input type="text" name="tracks" style="display: none">
+    </form>
+  <script>
+    var playlist_num = 0;
+    let params = (new URL(document.location)).searchParams;
+    let AccessToken = '{key}';
+    
+    async function GetTracks(next_url) {
+        items = [];
+        while (next_url) {
+            const payload = {
+                method: 'GET',
+                headers: { 'user': AccessToken },
+            };
+
+            const response = await fetch(next_url, payload)
+            const data = await response.json()
+            const tracks = data['items'];
+
+            for (let i = 0; i < tracks.length; i++)
+                items.push(tracks[i]['id']);
+            
+            next_url = data['next'];
+        }
+
+        return items;
+    }
+    
+    async function AddTracks(next_url, playlist, enabled=false) {
+        while (next_url) {
+            const payload = {
+                method: 'GET',
+                headers: { 'user': AccessToken },
+            };
+
+            const response = await fetch(next_url, payload)
+            const data = await response.json()
+
+            const items = data['items'];
+            for (var i = 0; i < items.length; i++) {
+                let track = items[i];
+                if (track['track'])
+                    track = track['track'];
+                
+                const div = document.createElement('div');
+                div.id = track['id'];
+                div.className = 'Track';
+                
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.name = div.id;
+                input.checked = enabled;
+
+                const label = document.createElement('p');
+                label.className = 'label';
+                label.innerHTML = track['name'];
+
+                div.appendChild(label);
+                div.appendChild(input);
+
+                playlist.appendChild(div);
+            } 
+            
+            next_url = data['next'];
+        }
+    }
+
+    function ToggleEnableElements(playlist_id, checked) {
+        const playlist = document.getElementById(playlist_id);
+        const node = playlist.children[1];
+        
+        for (var i = 1; i < node.childElementCount; i++) {
+            const div = node.childNodes[i];
+            const child = div.childNodes[1];
+            child.checked = checked;
+        }
+    }
+    
+    async function ToggleShowElements(playlist_id, type) {
+        const playlist = document.getElementById(playlist_id);
+        const node = playlist.children[1];
+
+        // Toggle Elements
+        if (node.childElementCount > 0)
+        {
+            if (node.style.display == 'none')
+                node.style.display = 'block';
+            else
+                node.style.display = 'none';
+        }
+        // Load Tracks
+        else
+        {   
+            const div = document.createElement('div');
+            div.className = 'centre';
+            
+            const loading = document.createElement('p');
+            loading.innerHTML = "Loading Tracks...";
+            loading.style.margin = 0;
+            loading.style.padding = 0;
+            div.appendChild(loading);
+            
+            node.appendChild(div);
+            node.style.display = 'block';
+
+            const url = "/tracks?playlist_id=" + playlist_id; 
+            await AddTracks(url, node);
+            
+            loading.remove();
+            
+            // Enable elements if playlist checkbox is shown
+            const checkbox = playlist.children[0].children[2].children[0];
+            ToggleEnableElements(playlist_id, checkbox.checked);
+        }
+    }
+
+    async function combine(playlist) {
+        const playlists = document.getElementsByClassName('Playlist');
+        for (var i = 0; i < playlists.length; i++)
+        {
+            const playlist = playlists[i];
+            const child = playlist.children[0].children[2].children[0];
+            if (!child.checked)
+                continue;
+
+            child.checked = false;
+
+            if (playlist.id.includes('new_playlist'))
+                continue;
+
+            const node = playlist.children[1];
+            const url = "/tracks?playlist_id=" + playlist.id;
+            await AddTracks(url, node, true);
+        }
+
+        const tracks = document.getElementsByClassName('Track');
+        for (var i = 0; i < tracks.length; i++)
+        {
+            const node = tracks[i];
+            const child = node.children[1];
+            if (!child.checked)
+                continue;
+
+            child.checked = false;
+
+            const div = document.createElement('div');
+            div.id = node.id;
+            div.className = 'Track';
+            
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.name = node.id;
+
+            const label = document.createElement('p');
+            label.className = 'label';
+            label.innerHTML = node.children[0].innerHTML;
+
+            div.appendChild(label);
+            div.appendChild(input);
+            playlist.appendChild(div);
+        }
+    }
+
+    function AddNewPlaylist(id, name, imageSrc) {
+        const playlist = document.createElement('div');
+        playlist.className = "Playlist";
+        playlist.id = id;
+        playlist.setAttribute('name', id);
+        
+        // Insert at top
+        const form = document.getElementsByTagName('form')[0];
+        const element = document.getElementsByClassName('Playlist')[0];
+        form.insertBefore(playlist, element);
+        
+        const centre = document.createElement('div');
+        centre.className = "centre";
+        playlist.appendChild(centre);
+        
+        const image = document.createElement('img');
+        image.className = "playlist-preview";
+        image.src = imageSrc;
+        centre.appendChild(image);
+        
+        const label = document.createElement('div');
+        label.className = "label";
+        centre.appendChild(label);
+        
+        const header = document.createElement('h4');
+        header.addEventListener("click", () => {
+            ToggleShowElements(id, 'playlists');
+        });
+        header.innerHTML = name;
+        label.appendChild(header);
+        
+        const checkbox = document.createElement('div');
+        checkbox.className = 'checkbox';
+        centre.appendChild(checkbox);
+        
+        const input = document.createElement('input');
+        input.type = "checkbox";
+        input.addEventListener("click", () => {
+            ToggleEnableElements(id, input.checked);
+        });
+        checkbox.appendChild(input);
+        
+        const track_div = document.createElement('div');
+        track_div.className = "Tracks";
+        track_div.style = "display: none";
+        playlist.appendChild(track_div);
+        return playlist;
+    }
+    
+    async function handle_submit(form) {
+        const playlist_name = document.getElementsByName("playlist_name")[0].value;
+        
+        // Create new playlist
+        playlist = AddNewPlaylist('new_playlist' + playlist_num, playlist_name, "");
+        playlist.appendChild(document.createElement('div'));
+        playlist_num++;
+        
+        playlist.style.display = 'none';
+        await combine(playlist.children[1]);
+        playlist.style.display = 'block';
+    }
+    
+    document.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const form = e.target;
+        //form.style.display = 'none';
+
+        const element = document.getElementById('loading');
+        element.style.display = 'flex';
+
+        handle_submit(form).then(() => {
+            form.style.display = 'block';
+            element.style.display = 'none';
+        });
+    });
+
+  </script>
+
+</body></html>
