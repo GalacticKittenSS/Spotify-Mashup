@@ -174,7 +174,7 @@ class RequestHandler:
         # Preview website with Spotify's top playlist [HTML]
         elif self.Path == "/preview":
             response = SpotifyApp.__request__('browse/categories/toplists/playlists/')
-            albums = [Spotify.Album.FromResponse(r, SpotifyApp) for r in response['playlists']['items']]
+            albums = [Spotify.Playlist.FromResponse(r, SpotifyApp) for r in response['playlists']['items']]
             self.Content = self.ShowPlaylists(albums, SpotifyApp.AccessToken, SpotifyApp.AccessToken)
 
         # Read File
