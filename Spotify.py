@@ -53,7 +53,7 @@ class Album:
       next_url = response.get('next')
       items += response.get('items')
 
-    return [Track.FromResponse(r['track'], self.Application) for r in items]
+    return [Track.FromResponse(r, self.Application) for r in items]
 
   def GetName(self):
     if not self.Name:

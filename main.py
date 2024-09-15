@@ -126,11 +126,21 @@ class RequestHandler(BaseHTTPRequestHandler):
             key = self.headers.get('user')
             user = SpotifyApp.GetUserFromKey(key)
             
-            playlist_id = self.GetQuery(queries, 'playlist_id')
-            playlist = Spotify.Playlist(playlist_id, user)
-            
+            playlist_id = self.GetQuery(queries, 'playlists_id')
+            album_id = self.GetQuery(queries, 'albums_id')
+
+            tracks = []
+
+            if playlist_id:
+                playlist = Spotify.Playlist(playlist_id, user)
+                tracks = playlist.GetTracks()
+
+            elif album_id:
+                album = Spotify.Album(album_id, user)
+                tracks = album.GetTracks()
+
             # TODO: Use pages
-            self.Content = json.dumps({ 'items': [{ "id": track.ID, "name": track.GetName() } for track in playlist.GetTracks()], 'next': '' })
+            self.Content = json.dumps({ 'items': [{ "id": track.ID, "name": track.GetName() } for track in tracks], 'next': '' })
             self.ContentType = 'application/json'
         
         # 'Create Playlist' form submitted [JSON]

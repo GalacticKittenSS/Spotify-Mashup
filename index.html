@@ -217,7 +217,7 @@
             node.appendChild(div);
             node.style.display = 'block';
 
-            const url = "/tracks?playlist_id=" + playlist_id; 
+            const url = "/tracks?" + type + "_id=" + playlist_id; 
             await AddTracks(url, node);
             
             loading.remove();
