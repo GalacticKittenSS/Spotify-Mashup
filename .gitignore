@@ -4,3 +4,4 @@ aws_deploy_results.json
 
 #Directories
 __pycache__/
+.venv/
